@@ -1,0 +1,114 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Dec 21 14:49:53 2017
+
+@author: DELL
+"""
+
+import pandas as pd  
+from WindPy import *  
+import datetime,time  
+import os 
+import numpy as np
+import xlwt
+import matplotlib.pyplot as plt
+
+def plot_volatilities(index,start_date,end_date):
+    #由wind导入数据
+    w.start()
+    stock=w.wsd(index, "trade_code,open,high,low,close", start_date,end_date)  
+    index_data = pd.DataFrame()
+    index_data['trade_date']=stock.Times
+    stock.Data[0]=index
+    index_data['stock_code']=stock.Data[0]
+    index_data['open'] =stock.Data[1]  
+    index_data['high'] =stock.Data[2]  
+    index_data['low']  =stock.Data[3]  
+    index_data['close']=stock.Data[4]  
+    
+    num=len(index_data['close'])#计算时间长度
+    num1=num-1#考虑自由度的时间长度
+    
+    name0='.jpg'
+    name1='D:\\pythonplt3\\'
+    subtitlename=index_data['stock_code'][0]#创建主图名称
+    savename=name1+subtitlename+name0#创建保存地址
+
+    plt.figure(figsize=(10,20))#主图大小
+    #计算历史波动率1
+    plt.subplot(3,1,1)
+    index_data['log_ret']=np.log(index_data['close']/index_data['close'].shift(1))#对数收益率
+    index_data['log_ret']=np.nan_to_num(index_data['log_ret'])#去除第一个交易日的空数据
+    index_data['log_ret_series']=index_data['log_ret']
+    mean=np.mean(index_data['log_ret'])
+    index_data['log_ret']=index_data['log_ret']-mean
+    index_data['historical_volatility']=(index_data['log_ret'])**2
+    asum=np.nansum(index_data['historical_volatility'])
+    a=np.sqrt(asum/num1)
+    name2='historical volatility'
+    titlename=name2
+    plt.plot(index_data['trade_date'],index_data['log_ret_series'])
+    plt.title(titlename)
+    plt.yticks(fontsize = 8)
+
+    #计算Parkinson波动率
+    plt.subplot(3,1,2)    
+    index_data['parkinson_volatility']=(np.log(index_data['high']/index_data['low']))**2
+    index_data['parkinson_volatility_series']=np.log(index_data['high']/index_data['low'])
+    b=np.sqrt((sum(index_data['parkinson_volatility'])/(4*np.log(2)))/num)
+    name3='Parkinson volatility'
+    titlename=name3
+    plt.plot(index_data['trade_date'],index_data['parkinson_volatility_series'])
+    plt.title(titlename)
+    plt.yticks(fontsize = 8)
+    
+    #计算真实平均波动率
+    plt.subplot(3,1,3)
+    index_data['comp_volatility']=0
+    comp_volatility=[0]
+    for i in range(num1):
+        a1=abs(index_data['close'][i+1]-index_data['close'][i])
+        a2=abs(index_data['high'][i+1]-index_data['close'][i])
+        a3=abs(index_data['low'][i+1]-index_data['close'][i])
+        a4=abs(index_data['high'][i+1]-index_data['low'][i+1])
+        if index_data['close'][i+1]>index_data['close'][i]:            
+            a0=max(a2,a4)/index_data['close'][i]
+        elif index_data['close'][i+1]<index_data['close'][i]:
+            a0=-max(a3,a4)/index_data['close'][i]
+        else:
+            if index_data['close'][i+1]>=index_data['open'][i+1]:
+                a0=a4/index_data['close'][i]
+            else:
+                a0=-a4/index_data['close'][i]              
+        comp_volatility.append(a0)
+    index_data['comp_volatility']=comp_volatility
+    index_data['comp_volatility_series']=index_data['comp_volatility']
+    mean=np.mean(index_data['comp_volatility'])
+    index_data['comp_volatility']=index_data['comp_volatility']-mean
+    index_data['comp_volatility']=(index_data['comp_volatility'])**2
+    c=np.sqrt(sum(index_data['comp_volatility'])/num1)
+    name4='average true volatility'
+    titlename=name4
+    plt.plot(index_data['trade_date'],index_data['comp_volatility_series'])
+    plt.title(titlename)
+    plt.yticks(fontsize = 8)
+    #plt.close()
+    plt.suptitle(subtitlename,fontsize=30)
+    #plt.savefig(savename,dpi=500)
+    #plt.close()
+    
+if __name__=='__main__':
+    index=['RBFI.WI', 'ZNFI.WI', 'HCFI.WI', 'CUFI.WI', 'ALFI.WI', 'PBFI.WI', \
+           'NIFI.WI', 'AUFI.WI', 'BUFI.WI', 'AGFI.WI', 'SNFI.WI', 'RUFI.WI', \
+           'JFI.WI', 'CSFI.WI', 'CFI.WI', 'JDFI.WI', 'JMFI.WI', 'VFI.WI', \
+           'PPFI.WI', 'MFI.WI', 'LFI.WI', 'IFI.WI', 'AFI.WI', 'PFI.WI',  \
+           'YFI.WI', 'SFFI.WI', 'ZCFI.WI', 'SMFI.WI', 'FGFI.WI', 'MAFI.WI', \
+           'RMFI.WI', 'CFFI.WI', 'TAFI.WI', 'OIFI.WI', 'SRFI.WI', 'WHFI.WI', \
+           'IH.CFE', 'IF.CFE', 'IC.CFE', 'TF.CFE', 'T.CFE']
+    num=len(index)
+    for i in range(num):
+        plot_volatilities(index[i],'20170101','20171219')
+    
+    #棉纱期货今年8月正式交易，单独计算
+    plot_volatilities('CYFI.WI','20170821','20171219')
+    index.append('CYFI.WI')
